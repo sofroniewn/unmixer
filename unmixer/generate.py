@@ -9,4 +9,4 @@ def generate(counts, coeff):
 
     signal = poisson(count_bin).sum(axis=0)*coeff['qe']
     signal += normal(loc=0, scale=coeff['noise'], size=signal.shape)
-    return (signal/coeff['graylevel']).astype(int)
+    return (signal/coeff['graylevel']).astype(int).clip(0, 2**16)
