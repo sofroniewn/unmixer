@@ -1,7 +1,8 @@
 from pandas import read_csv
 from glob import glob
 from os.path import basename, splitext
-from numpy import asarray
+from numpy import asarray, ones, zeros
+from numpy.random import choice, binomial, poisson
 from pandas import DataFrame, melt, concat
 from .infer import infer
 from .generate import generate
@@ -27,3 +28,29 @@ def convert(laser_lines, filter_bands, spectra, sum_lasers=False):
 
 def run(coeff, counts, repeats, constrained = False):
     return asarray([infer(generate(counts, coeff), coeff, constrained) for i in range(repeats)])
+
+def simulation(coeff, nMixes=100, nRepeats=1000, method='nnls'):
+    nDyes = len(coeff['emission'])
+    k = []
+    for i in range(nMixes):
+        counts = coeff['nPhotonsBackground']*ones(nDyes)
+        inds = choice(nDyes, coeff['nDyesPerGene'], replace=False)
+        if coeff['amplification']:
+            nDM = nDyeMolecules(coeff['nTargetsPerDye'], coeff['pTargetBinding'], coeff['nDyeMoleculesPerTarget'])
+            counts[inds] = coeff['nPhotonsPerDyeMolecule']*nDM
+        else:
+            counts[inds] = coeff['nPhotonsPerDyeMolecule']
+        results = run(coeff, counts, nRepeats, constrained = method)
+        e = errors(results, inds)
+        k.append(e)
+    return asarray(k)
+
+def errors(results, truth):
+    counts = zeros(results.shape[1])
+    counts[truth] = 1
+    tmp = asarray([(x/x.max()).round() - counts for x in results])
+    return abs(tmp).any(axis=1).mean()*100
+
+def nDyeMolecules(nTargetsPerDye, pTargetBinding, nDyeMoleculesPerTarget):
+    nInitiators = binomial(nTargetsPerDye, pTargetBinding)
+    return sum([poisson(nDyeMoleculesPerTarget) for i in range(nInitiators)])
